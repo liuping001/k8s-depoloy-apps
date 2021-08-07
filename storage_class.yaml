@@ -1,0 +1,84 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nfs-provisioner
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: nfs-provisioner-runner
+rules:
+  -  apiGroups: [""]
+     resources: ["persistentvolumes"]
+     verbs: ["get", "list", "watch", "create", "delete"]
+  -  apiGroups: [""]
+     resources: ["persistentvolumeclaims"]
+     verbs: ["get", "list", "watch", "update"]
+  -  apiGroups: ["storage.k8s.io"]
+     resources: ["storageclasses"]
+     verbs: ["get", "list", "watch"]
+  -  apiGroups: [""]
+     resources: ["events"]
+     verbs: ["watch", "create", "update", "patch"]
+  -  apiGroups: [""]
+     resources: ["services", "endpoints"]
+     verbs: ["get","create","list", "watch","update"]
+  -  apiGroups: ["extensions"]
+     resources: ["podsecuritypolicies"]
+     resourceNames: ["nfs-provisioner"]
+     verbs: ["use"]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: run-nfs-provisioner
+subjects:
+  - kind: ServiceAccount
+    name: nfs-provisioner
+    namespace: default
+roleRef:
+  kind: ClusterRole
+  name: nfs-provisioner-runner
+  apiGroup: rbac.authorization.k8s.io
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: nfs-provisioner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nfs-provisioner
+  template:
+    metadata:
+      labels:
+        app: nfs-provisioner
+    spec:
+      serviceAccount: nfs-provisioner  #这个要与刚才创建的serviceaccount 的名字一致
+      containers:
+        - name: nfs-provisioner
+          image: registry.cn-hangzhou.aliyuncs.com/open-ali/nfs-client-provisioner
+          volumeMounts:
+            - name: nfs-client-root
+              mountPath: /persistentvolumes
+          env:
+            - name: PROVISIONER_NAME
+              value: example.com/nfs #这里名字自定义，要记住storageclass 后面要用到
+            - name: NFS_SERVER
+              value: 10.0.8.3
+            - name: NFS_PATH
+              value: /nfs_shared
+      volumes:
+        - name: nfs-client-root
+          nfs:
+            server: 10.0.8.3
+            path: /nfs_shared #这里需要注意，如果用的公有云服务的nfs 或者nas，必须要提前创建好目录
+---
+
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: my-storage-class
+provisioner: example.com/nfs
+volumeBindingMode: WaitForFirstConsumer
