@@ -1,3 +1,4 @@
+# 使用storage class创建pvc
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
@@ -45,7 +46,7 @@ metadata:
 spec:
   ports:
     - name: port
-      port: 80
+      port: 6379
       targetPort: redis-port
   selector:
     app: redis
